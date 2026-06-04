@@ -28,8 +28,10 @@ Current hosts:
 ```
 agent-platform-infra/
 ├── ansible.cfg
-├── inventory/hosts.yml          # all hosts grouped by role
-├── group_vars/                  # all.yml + per-group vars
+├── inventory/
+│   ├── hosts.yml                # all hosts grouped by role
+│   └── group_vars/              # all.yml + per-group vars (adjacent to hosts.yml
+│                                #   so Ansible finds them in both ad-hoc and playbook runs)
 ├── roles/                       # common, docker, claude_code, postgres,
 │                                #   traffic_gen, agent_backend, agent_frontend
 ├── playbooks/                   # site.yml, common.yml, verify.yml

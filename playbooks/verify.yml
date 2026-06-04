@@ -136,6 +136,7 @@
 # ── agent_backend ─────────────────────────────────────────────────────────────
 - name: Verify agent backend containers and health endpoints
   hosts: agent_backend
+  become: true
   gather_facts: false
   tags: [verify, agent_backend]
   tasks:
@@ -194,6 +195,7 @@
 # ── agent_frontend ────────────────────────────────────────────────────────────
 - name: Verify agent frontend containers and health endpoints
   hosts: agent_frontend
+  become: true
   gather_facts: false
   tags: [verify, agent_frontend]
   tasks:

@@ -33,11 +33,25 @@
     state: present
   tags: [common, groups]
 
+# OCI Ubuntu minimal ships a default REJECT-all rule in the INPUT chain.
+# Remove it so our ACCEPT rules (and the default ACCEPT policy) take effect.
+# OCI security lists provide the outer perimeter; this host-level REJECT only
+# blocks legitimate intra-VCN traffic.
+- name: Remove OCI default REJECT-all rule from INPUT chain
+  ansible.builtin.iptables:
+    chain: INPUT
+    jump: REJECT
+    reject_with: icmp-host-prohibited
+    state: absent
+  notify: Save iptables rules
+  tags: [common, firewall]
+
 - name: Allow established and related inbound connections
   ansible.builtin.iptables:
     chain: INPUT
     ctstate: ESTABLISHED,RELATED
     jump: ACCEPT
+    action: insert
     state: present
   notify: Save iptables rules
   tags: [common, firewall]
@@ -48,6 +62,7 @@
     protocol: tcp
     destination_port: "22"
     jump: ACCEPT
+    action: insert
     state: present
   notify: Save iptables rules
   tags: [common, firewall]
@@ -57,6 +72,7 @@
     chain: INPUT
     source: "{{ vcn_cidr }}"
     jump: ACCEPT
+    action: insert
     state: present
   notify: Save iptables rules
   tags: [common, firewall]
@@ -66,6 +82,7 @@
     chain: FORWARD
     source: "{{ vcn_cidr }}"
     jump: ACCEPT
+    action: insert
     state: present
   notify: Save iptables rules
   tags: [common, firewall]

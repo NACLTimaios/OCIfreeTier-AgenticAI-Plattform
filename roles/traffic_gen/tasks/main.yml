@@ -21,12 +21,24 @@
     state: present
   tags: [traffic_gen, repo]
 
-- name: Install PostgreSQL client and pgbench
+- name: Install PostgreSQL client tools and pgbench
   ansible.builtin.apt:
     name:
       - "postgresql-client-{{ postgres_client_version }}"
+      - "postgresql-{{ postgres_client_version }}"
     state: present
     update_cache: true
+  tags: [traffic_gen, install]
+
+# pgbench ships with the server package; we don't need the server itself.
+# Mask rather than disable: the PGDG installer uses a systemd generator that
+# re-enables the unit at runtime, so 'enabled: false' alone is not idempotent.
+- name: Stop and mask local PostgreSQL service on traffic generator
+  ansible.builtin.systemd:
+    name: "postgresql@{{ postgres_client_version }}-main"
+    state: stopped
+    masked: true
+  failed_when: false
   tags: [traffic_gen, install]
 
 - name: Install sysbench

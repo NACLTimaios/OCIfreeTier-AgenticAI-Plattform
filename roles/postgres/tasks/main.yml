@@ -27,6 +27,7 @@
       - "postgresql-{{ postgres_version }}"
       - "postgresql-client-{{ postgres_version }}"
       - "postgresql-contrib-{{ postgres_version }}"
+      - python3-psycopg2
     state: present
     update_cache: true
   tags: [postgres, install]
