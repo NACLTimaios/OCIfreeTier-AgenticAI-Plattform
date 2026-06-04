@@ -144,6 +144,28 @@ No role is complete until:
 3. Its overridable values live in group_vars/defaults, not hardcoded in tasks.
 When adding or modifying a role, update verify.yml and the README in the same change.
 
+## Tooling
+ansible-core is **not** installed system-wide. It is managed via **pipx**:
+
+```
+pipx install ansible==10.7.0   # bundles ansible-core 2.17.14
+```
+
+The `ansible` binary lives in `~/.local/bin` (added to PATH by pipx). Collections
+are installed into `~/.ansible/collections` with `ansible-galaxy collection install
+-r requirements.yml`. The currently installed (pinned) collection versions are:
+
+| Collection            | Version |
+|-----------------------|---------|
+| ansible.posix         | 2.2.0   |
+| community.docker      | 5.2.1   |
+| community.general     | 13.0.1  |
+| community.postgresql  | 4.2.0   |
+
+`requirements.yml` declares minimum floor versions (`>=`); the table above is what
+is actually installed on the control node. When writing tasks, target the installed
+versions — don't assume features from newer releases are available.
+
 ## How It's Run
 From a control machine with SSH access to all private IPs:
 ```
