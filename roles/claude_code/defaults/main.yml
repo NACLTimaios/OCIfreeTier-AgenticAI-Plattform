@@ -1,0 +1,3 @@
+---
+node_version: 20
+claude_code_npm_package: "@anthropic-ai/claude-code"

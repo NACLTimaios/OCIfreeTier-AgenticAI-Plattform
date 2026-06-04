@@ -1,0 +1,15 @@
+---
+postgres_client_version: 16
+
+postgres_target_host: "127.0.0.1"
+postgres_target_port: 5432
+postgres_target_db: agentdb
+postgres_target_user: agentuser
+
+pgbench_scale: 1
+pgbench_clients: 2
+pgbench_jobs: 1
+pgbench_time: 60
+
+sysbench_threads: 2
+sysbench_time: 60

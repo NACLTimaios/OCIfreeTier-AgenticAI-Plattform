@@ -1,0 +1,22 @@
+# Ansible-managed pg_hba.conf for {{ ansible_hostname }}
+# Do not edit manually — changes will be overwritten on the next playbook run.
+#
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# Unix domain socket (superuser and postgres user)
+local   all             postgres                                peer
+local   all             all                                     peer
+
+# Localhost IPv4
+host    all             all             127.0.0.1/32            scram-sha-256
+
+# Localhost IPv6
+host    all             all             ::1/128                 scram-sha-256
+
+# VCN subnet — agent backend, frontend, and traffic generator
+host    {{ postgres_db }}  {{ postgres_user }}  {{ postgres_allowed_subnet }}  scram-sha-256
+
+# Replication
+local   replication     all                                     peer
+host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             ::1/128                 scram-sha-256

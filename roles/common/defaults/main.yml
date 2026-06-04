@@ -1,0 +1,17 @@
+---
+common_packages:
+  - curl
+  - wget
+  - vim
+  - htop
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - python3-pip
+  - netfilter-persistent
+  - iptables-persistent
+
+system_timezone: "UTC"
+vcn_cidr: "10.0.0.0/16"

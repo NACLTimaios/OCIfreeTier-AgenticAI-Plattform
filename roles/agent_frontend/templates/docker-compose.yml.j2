@@ -1,0 +1,47 @@
+# Ansible-managed — do not edit manually.
+# Replace placeholder nginx images with real application image tags when available.
+services:
+  dashboard:
+    image: "{{ dashboard_image }}"
+    container_name: dashboard
+    restart: unless-stopped
+    ports:
+      - "{{ dashboard_port }}:80"
+    environment:
+      BACKEND_HOST: "{{ backend_host }}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  hitl-panel:
+    image: "{{ hitl_panel_image }}"
+    container_name: hitl-panel
+    restart: unless-stopped
+    ports:
+      - "{{ hitl_panel_port }}:80"
+    environment:
+      BACKEND_HOST: "{{ backend_host }}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  query-interface:
+    image: "{{ query_interface_image }}"
+    container_name: query-interface
+    restart: unless-stopped
+    ports:
+      - "{{ query_interface_port }}:80"
+    environment:
+      BACKEND_HOST: "{{ backend_host }}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

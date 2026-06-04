@@ -1,0 +1,45 @@
+---
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  tags: [traffic_gen, repo]
+
+- name: Download PostgreSQL apt signing key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+    force: false
+  tags: [traffic_gen, repo]
+
+- name: Add PostgreSQL apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    filename: postgresql
+    state: present
+  tags: [traffic_gen, repo]
+
+- name: Install PostgreSQL client and pgbench
+  ansible.builtin.apt:
+    name:
+      - "postgresql-client-{{ postgres_client_version }}"
+    state: present
+    update_cache: true
+  tags: [traffic_gen, install]
+
+- name: Install sysbench
+  ansible.builtin.apt:
+    name: sysbench
+    state: present
+  tags: [traffic_gen, install]
+
+# pgbench lives at /usr/lib/postgresql/<ver>/bin/pgbench; expose it on PATH
+- name: Create pgbench symlink in /usr/local/bin
+  ansible.builtin.file:
+    src: "/usr/lib/postgresql/{{ postgres_client_version }}/bin/pgbench"
+    dest: /usr/local/bin/pgbench
+    state: link
+    force: false
+  tags: [traffic_gen, install]

@@ -1,0 +1,12 @@
+---
+agent_frontend_app_dir: "/opt/agent-frontend"
+
+dashboard_port: 3000
+hitl_panel_port: 3001
+query_interface_port: 3002
+
+dashboard_image: "nginx:alpine"
+hitl_panel_image: "nginx:alpine"
+query_interface_image: "nginx:alpine"
+
+backend_host: "127.0.0.1"

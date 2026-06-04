@@ -1,0 +1,54 @@
+# Ansible-managed — do not edit manually.
+# Replace placeholder nginx images with real application image tags when available.
+services:
+  orchestrator:
+    image: "{{ orchestrator_image }}"
+    container_name: orchestrator
+    restart: unless-stopped
+    ports:
+      - "{{ orchestrator_port }}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  tool-registry:
+    image: "{{ tool_registry_image }}"
+    container_name: tool-registry
+    restart: unless-stopped
+    ports:
+      - "{{ tool_registry_port }}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  hitl-queue:
+    image: "{{ hitl_queue_image }}"
+    container_name: hitl-queue
+    restart: unless-stopped
+    ports:
+      - "{{ hitl_queue_port }}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  log-store:
+    image: "{{ log_store_image }}"
+    container_name: log-store
+    restart: unless-stopped
+    ports:
+      - "{{ log_store_port }}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

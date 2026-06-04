@@ -1,0 +1,49 @@
+---
+# Full-fleet deploy. Run from agent-platform-infra/:
+#   ansible-playbook -i inventory/hosts.yml playbooks/site.yml
+#
+# Each play targets a specific group; adding a host to a group in inventory
+# automatically includes it in the corresponding play.
+
+- name: Bootstrap and harden all hosts
+  hosts: all
+  become: true
+  gather_facts: false  # deferred to common role after Python bootstrap
+  roles:
+    - common
+
+- name: Install Docker on container hosts
+  hosts: agent_backend:agent_frontend
+  become: true
+  roles:
+    - docker
+
+- name: Install Claude Code on agent backend (control node)
+  hosts: agent_backend
+  become: true
+  roles:
+    - claude_code
+
+- name: Configure PostgreSQL database server
+  hosts: db
+  become: true
+  roles:
+    - postgres
+
+- name: Configure traffic generator
+  hosts: traffic
+  become: true
+  roles:
+    - traffic_gen
+
+- name: Deploy agent backend services
+  hosts: agent_backend
+  become: true
+  roles:
+    - agent_backend
+
+- name: Deploy agent frontend services
+  hosts: agent_frontend
+  become: true
+  roles:
+    - agent_frontend

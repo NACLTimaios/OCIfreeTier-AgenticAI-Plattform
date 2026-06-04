@@ -1,0 +1,30 @@
+---
+- name: Create agent-backend application directory
+  ansible.builtin.file:
+    path: "{{ agent_backend_app_dir }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  tags: [agent_backend, setup]
+
+- name: Deploy agent-backend docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ agent_backend_app_dir }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+  notify: Restart agent-backend services
+  tags: [agent_backend, config]
+
+- name: Pull agent-backend container images
+  community.docker.docker_compose_v2_pull:
+    project_src: "{{ agent_backend_app_dir }}"
+  tags: [agent_backend, pull]
+
+- name: Start agent-backend services
+  community.docker.docker_compose_v2:
+    project_src: "{{ agent_backend_app_dir }}"
+    state: present
+  tags: [agent_backend, start]

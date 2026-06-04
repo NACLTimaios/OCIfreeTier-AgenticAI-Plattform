@@ -1,0 +1,92 @@
+---
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  tags: [postgres, repo]
+
+- name: Download PostgreSQL apt signing key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+    force: false
+  tags: [postgres, repo]
+
+- name: Add PostgreSQL apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    filename: postgresql
+    state: present
+  tags: [postgres, repo]
+
+- name: Install PostgreSQL {{ postgres_version }}
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ postgres_version }}"
+      - "postgresql-client-{{ postgres_version }}"
+      - "postgresql-contrib-{{ postgres_version }}"
+    state: present
+    update_cache: true
+  tags: [postgres, install]
+
+- name: Deploy PostgreSQL override configuration
+  ansible.builtin.template:
+    src: postgresql_override.conf.j2
+    dest: "{{ postgres_config_dir }}/conf.d/00_ansible.conf"
+    owner: postgres
+    group: postgres
+    mode: '0640'
+  notify: Restart PostgreSQL
+  tags: [postgres, config]
+
+- name: Deploy pg_hba.conf
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ postgres_config_dir }}/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: '0640'
+    backup: true
+  notify: Reload PostgreSQL
+  tags: [postgres, config]
+
+- name: Ensure PostgreSQL is started and enabled
+  ansible.builtin.systemd:
+    name: "postgresql@{{ postgres_version }}-main"
+    state: started
+    enabled: true
+  tags: [postgres, service]
+
+# Flush handlers so restarts apply before creating DB objects
+- name: Flush handlers before database setup
+  ansible.builtin.meta: flush_handlers
+  tags: [postgres, db]
+
+- name: Create PostgreSQL application user
+  community.postgresql.postgresql_user:
+    name: "{{ postgres_user }}"
+    password: "{{ postgres_password }}"
+    state: present
+  become: true
+  become_user: postgres
+  tags: [postgres, db]
+
+- name: Create PostgreSQL application database
+  community.postgresql.postgresql_db:
+    name: "{{ postgres_db }}"
+    owner: "{{ postgres_user }}"
+    state: present
+  become: true
+  become_user: postgres
+  tags: [postgres, db]
+
+- name: Enable pg_stat_statements extension
+  community.postgresql.postgresql_ext:
+    name: pg_stat_statements
+    db: "{{ postgres_db }}"
+    state: present
+  become: true
+  become_user: postgres
+  tags: [postgres, db]

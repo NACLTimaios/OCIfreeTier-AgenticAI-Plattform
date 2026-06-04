@@ -1,0 +1,71 @@
+---
+# Bootstrap Python before any module can run — Ubuntu Minimal may ship without python3.
+# Uses raw (SSH only, no Python required) then re-runs setup to populate facts.
+- name: Bootstrap Python 3 interpreter
+  ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get update -qq && apt-get install -y python3)
+  changed_when: false
+  tags: [common, bootstrap]
+
+- name: Gather facts (deferred until after Python bootstrap)
+  ansible.builtin.setup:
+  tags: [common, bootstrap]
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ system_timezone }}"
+  tags: [common, timezone]
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [common, packages]
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+  tags: [common, packages]
+
+- name: Ensure docker group exists
+  ansible.builtin.group:
+    name: docker
+    state: present
+  tags: [common, groups]
+
+- name: Allow established and related inbound connections
+  ansible.builtin.iptables:
+    chain: INPUT
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+    state: present
+  notify: Save iptables rules
+  tags: [common, firewall]
+
+- name: Allow inbound SSH
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "22"
+    jump: ACCEPT
+    state: present
+  notify: Save iptables rules
+  tags: [common, firewall]
+
+- name: Allow intra-VCN inbound traffic
+  ansible.builtin.iptables:
+    chain: INPUT
+    source: "{{ vcn_cidr }}"
+    jump: ACCEPT
+    state: present
+  notify: Save iptables rules
+  tags: [common, firewall]
+
+- name: Allow intra-VCN forwarded traffic
+  ansible.builtin.iptables:
+    chain: FORWARD
+    source: "{{ vcn_cidr }}"
+    jump: ACCEPT
+    state: present
+  notify: Save iptables rules
+  tags: [common, firewall]

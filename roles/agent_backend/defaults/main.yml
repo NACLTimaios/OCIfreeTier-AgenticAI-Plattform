@@ -1,0 +1,17 @@
+---
+agent_backend_app_dir: "/opt/agent-backend"
+
+orchestrator_port: 8080
+tool_registry_port: 8081
+hitl_queue_port: 8082
+log_store_port: 8083
+
+orchestrator_image: "nginx:alpine"
+tool_registry_image: "nginx:alpine"
+hitl_queue_image: "nginx:alpine"
+log_store_image: "nginx:alpine"
+
+backend_postgres_host: "127.0.0.1"
+backend_postgres_port: 5432
+backend_postgres_db: agentdb
+backend_postgres_user: agentuser

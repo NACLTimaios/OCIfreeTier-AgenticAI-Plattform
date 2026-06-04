@@ -1,0 +1,30 @@
+---
+- name: Create agent-frontend application directory
+  ansible.builtin.file:
+    path: "{{ agent_frontend_app_dir }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  tags: [agent_frontend, setup]
+
+- name: Deploy agent-frontend docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ agent_frontend_app_dir }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+  notify: Restart agent-frontend services
+  tags: [agent_frontend, config]
+
+- name: Pull agent-frontend container images
+  community.docker.docker_compose_v2_pull:
+    project_src: "{{ agent_frontend_app_dir }}"
+  tags: [agent_frontend, pull]
+
+- name: Start agent-frontend services
+  community.docker.docker_compose_v2:
+    project_src: "{{ agent_frontend_app_dir }}"
+    state: present
+  tags: [agent_frontend, start]

@@ -1,0 +1,24 @@
+---
+# Vault-backed credential aliases — roles reference these, never vault_ keys directly
+postgres_password: "{{ vault_postgres_password }}"
+claude_api_key: "{{ vault_claude_api_key }}"
+
+# Network — must match the OCI VCN CIDR
+vcn_cidr: "10.0.0.0/16"
+
+# Packages installed on every host by the common role
+common_packages:
+  - curl
+  - wget
+  - vim
+  - htop
+  - git
+  - unzip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+  - python3-pip
+  - netfilter-persistent
+  - iptables-persistent
+
+system_timezone: "UTC"

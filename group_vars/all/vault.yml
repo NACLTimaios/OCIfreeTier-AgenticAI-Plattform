@@ -1,0 +1,10 @@
+---
+# PLAINTEXT TEMPLATE — encrypt before committing:
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# LAB-ONLY convenience credentials.
+# If this environment becomes internet-facing or production:
+#   1. Rotate all credentials immediately.
+#   2. Migrate to a proper secret manager (HashiCorp Vault, OCI Vault, etc.).
+vault_postgres_password: "lab_postgres_pass_change_me"
+vault_claude_api_key: "your-claude-api-key-here"

@@ -1,0 +1,9 @@
+---
+# Apply only the common role to all hosts.
+# Useful for bootstrapping new VMs before running the full site.yml.
+- name: Bootstrap and harden all hosts
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - common

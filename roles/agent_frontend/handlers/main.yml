@@ -1,0 +1,6 @@
+---
+- name: Restart agent-frontend services
+  community.docker.docker_compose_v2:
+    project_src: "{{ agent_frontend_app_dir }}"
+    state: present
+    recreate: always

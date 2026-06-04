@@ -1,0 +1,237 @@
+---
+# Verification playbook — confirms every role's desired state is present.
+# A failed assertion exits non-zero so CI can gate on this.
+# Run: ansible-playbook -i inventory/hosts.yml playbooks/verify.yml
+
+# ── common ────────────────────────────────────────────────────────────────────
+- name: Verify common role on all hosts
+  hosts: all
+  become: true
+  gather_facts: true
+  tags: [verify, common]
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Assert common packages are installed
+      ansible.builtin.assert:
+        that: "item in ansible_facts.packages"
+        fail_msg: "Required package '{{ item }}' is not installed"
+        success_msg: "Package '{{ item }}' is present"
+      loop: "{{ common_packages }}"
+
+    - name: Assert docker group exists (getent fails if absent)
+      ansible.builtin.getent:
+        database: group
+        key: docker
+
+    - name: Assert intra-VCN iptables rule is present (INPUT)
+      ansible.builtin.command: iptables -C INPUT -s {{ vcn_cidr }} -j ACCEPT
+      changed_when: false
+
+# ── docker ────────────────────────────────────────────────────────────────────
+- name: Verify Docker on container hosts
+  hosts: agent_backend:agent_frontend
+  become: true
+  gather_facts: false
+  tags: [verify, docker]
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert Docker service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'docker.service' in ansible_facts.services"
+          - "ansible_facts.services['docker.service'].state == 'running'"
+          - "ansible_facts.services['docker.service'].status == 'enabled'"
+        fail_msg: "Docker service is not running or not enabled"
+
+    - name: Run hello-world container (validates correct-arch image pull and runtime)
+      ansible.builtin.command: docker run --rm hello-world
+      changed_when: false
+      register: hello_result
+
+    - name: Assert hello-world ran successfully
+      ansible.builtin.assert:
+        that: "'Hello from Docker' in hello_result.stdout"
+        fail_msg: "docker run hello-world did not produce expected output"
+
+# ── postgres ──────────────────────────────────────────────────────────────────
+- name: Verify PostgreSQL on db hosts
+  hosts: db
+  become: true
+  gather_facts: false
+  tags: [verify, postgres]
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Assert PostgreSQL service is active and enabled
+      ansible.builtin.assert:
+        that:
+          - "'postgresql@16-main.service' in ansible_facts.services"
+          - "ansible_facts.services['postgresql@16-main.service'].state == 'running'"
+        fail_msg: "PostgreSQL 16 service is not running"
+
+    - name: Assert PostgreSQL is listening on the configured port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ postgres_port }}"
+        timeout: 5
+        state: started
+
+    - name: Check pg_stat_statements extension is enabled
+      community.postgresql.postgresql_query:
+        db: "{{ postgres_db }}"
+        query: "SELECT COUNT(*) AS cnt FROM pg_extension WHERE extname = 'pg_stat_statements'"
+      become_user: postgres
+      register: pg_stat_result
+
+    - name: Assert pg_stat_statements is loaded
+      ansible.builtin.assert:
+        that: "pg_stat_result.query_result[0].cnt | int == 1"
+        fail_msg: "pg_stat_statements extension is not installed in {{ postgres_db }}"
+
+# ── postgres port reachable from agent subnet ──────────────────────────────────
+- name: Verify PostgreSQL port reachable from agent backend
+  hosts: agent_backend
+  gather_facts: false
+  tags: [verify, postgres, connectivity]
+  tasks:
+    - name: Assert PostgreSQL port is reachable from agent backend
+      ansible.builtin.wait_for:
+        host: "{{ hostvars['vm1']['ansible_host'] }}"
+        port: "{{ hostvars['vm1']['postgres_port'] | default(5432) }}"
+        timeout: 5
+        state: started
+
+# ── traffic_gen ───────────────────────────────────────────────────────────────
+- name: Verify traffic_gen role on traffic hosts
+  hosts: traffic
+  gather_facts: false
+  tags: [verify, traffic_gen]
+  tasks:
+    - name: Assert pgbench binary is present and executable
+      ansible.builtin.command: pgbench --version
+      changed_when: false
+      register: pgbench_ver
+
+    - name: Assert pgbench version output is sane
+      ansible.builtin.assert:
+        that: "'pgbench' in pgbench_ver.stdout"
+        fail_msg: "pgbench binary not found or not executable"
+
+    - name: Assert sysbench binary is present and executable
+      ansible.builtin.command: sysbench --version
+      changed_when: false
+      register: sysbench_ver
+
+    - name: Assert sysbench version output is sane
+      ansible.builtin.assert:
+        that: "sysbench_ver.rc == 0"
+        fail_msg: "sysbench binary not found or not executable"
+
+# ── agent_backend ─────────────────────────────────────────────────────────────
+- name: Verify agent backend containers and health endpoints
+  hosts: agent_backend
+  gather_facts: false
+  tags: [verify, agent_backend]
+  tasks:
+    - name: Check orchestrator container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" orchestrator
+      changed_when: false
+      register: orch_state
+      failed_when: orch_state.stdout | trim != 'true'
+
+    - name: Check tool-registry container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" tool-registry
+      changed_when: false
+      register: tr_state
+      failed_when: tr_state.stdout | trim != 'true'
+
+    - name: Check hitl-queue container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" hitl-queue
+      changed_when: false
+      register: hq_state
+      failed_when: hq_state.stdout | trim != 'true'
+
+    - name: Check log-store container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" log-store
+      changed_when: false
+      register: ls_state
+      failed_when: ls_state.stdout | trim != 'true'
+
+    - name: Assert orchestrator health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ orchestrator_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+    - name: Assert tool-registry health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ tool_registry_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+    - name: Assert hitl-queue health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ hitl_queue_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+    - name: Assert log-store health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ log_store_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+# ── agent_frontend ────────────────────────────────────────────────────────────
+- name: Verify agent frontend containers and health endpoints
+  hosts: agent_frontend
+  gather_facts: false
+  tags: [verify, agent_frontend]
+  tasks:
+    - name: Check dashboard container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" dashboard
+      changed_when: false
+      register: dash_state
+      failed_when: dash_state.stdout | trim != 'true'
+
+    - name: Check hitl-panel container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" hitl-panel
+      changed_when: false
+      register: hp_state
+      failed_when: hp_state.stdout | trim != 'true'
+
+    - name: Check query-interface container is running
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Running{{ '}}' }}" query-interface
+      changed_when: false
+      register: qi_state
+      failed_when: qi_state.stdout | trim != 'true'
+
+    - name: Assert dashboard health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ dashboard_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+    - name: Assert hitl-panel health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ hitl_panel_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
+
+    - name: Assert query-interface health endpoint returns 200
+      ansible.builtin.uri:
+        url: "http://localhost:{{ query_interface_port }}/"
+        method: GET
+        status_code: 200
+        timeout: 10
