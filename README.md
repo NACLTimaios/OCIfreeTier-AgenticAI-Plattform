@@ -24,15 +24,15 @@ agent-platform-infra/
 ├── .gitignore                   # excludes .vault_pass
 ├── requirements.yml             # Galaxy collections
 ├── inventory/
-│   └── hosts.yml                # all hosts grouped by role
-├── group_vars/
-│   ├── all/
-│   │   ├── vars.yml             # clean aliases + shared vars
-│   │   └── vault.yml            # ENCRYPT THIS — contains vault_ prefixed secrets
-│   ├── db/vars.yml
-│   ├── traffic/vars.yml
-│   ├── agent_backend/vars.yml
-│   └── agent_frontend/vars.yml
+│   ├── hosts.yml                # all hosts grouped by role
+│   └── group_vars/              # adjacent to hosts.yml so Ansible resolves vars
+│       ├── all/                 #   in both ad-hoc and ansible-playbook contexts
+│       │   ├── vars.yml         #   clean aliases + shared vars
+│       │   └── vault.yml        #   ENCRYPT THIS — contains vault_ prefixed secrets
+│       ├── db/vars.yml
+│       ├── traffic/vars.yml
+│       ├── agent_backend/vars.yml
+│       └── agent_frontend/vars.yml
 ├── roles/
 │   ├── common/                  # Python bootstrap, packages, iptables
 │   ├── docker/                  # Docker CE (arch-aware), compose plugin
@@ -51,9 +51,13 @@ agent-platform-infra/
 
 ### Control node (arm1)
 
+Ansible is managed via **pipx** to keep it isolated from the system Python:
+
 ```bash
-# Install Ansible and required collections
-pip3 install ansible
+# Install pinned Ansible (bundles ansible-core 2.17.14)
+pipx install ansible==10.7.0
+
+# Install required collections into ~/.ansible/collections
 ansible-galaxy collection install -r requirements.yml
 ```
 
@@ -69,10 +73,10 @@ chmod 600 .vault_pass
 
 ```bash
 # vault.yml ships as plaintext template — encrypt before first commit
-ansible-vault encrypt group_vars/all/vault.yml
+ansible-vault encrypt inventory/group_vars/all/vault.yml
 
 # Edit secrets
-ansible-vault edit group_vars/all/vault.yml
+ansible-vault edit inventory/group_vars/all/vault.yml
 ```
 
 > **Lab-only security notice:** Ansible Vault with a local `.vault_pass` file is
@@ -93,6 +97,12 @@ ansible-playbook -i inventory/hosts.yml playbooks/site.yml
 ```bash
 ansible-playbook -i inventory/hosts.yml playbooks/site.yml --check
 ```
+
+> **Expected check-mode noise:** the `raw` Python bootstrap task is not
+> check-mode aware and may warn on a clean host. Tasks that depend on
+> earlier ones (e.g. file-permission tasks after a GPG dearmor) may show
+> cascading failures. Both resolve on a real run.
+
 
 ### Per-group deploy
 
@@ -142,6 +152,9 @@ ansible-playbook -i inventory/hosts.yml playbooks/verify.yml --tags docker
 - Bootstraps Python 3 via `raw` (works on Ubuntu Minimal with no Python installed).
 - Installs common packages (curl, git, htop, iptables-persistent, …).
 - Ensures the `docker` group exists.
+- Removes the OCI default `REJECT`-all iptables rule (which sits ahead of any
+  appended `ACCEPT` rules and blocks intra-VCN traffic). OCI security lists
+  provide the outer perimeter.
 - Opens intra-VCN traffic (`10.0.0.0/16`) via iptables and persists rules with
   `netfilter-persistent`.
 
@@ -165,19 +178,23 @@ ansible-playbook -i inventory/hosts.yml playbooks/verify.yml --tags docker
 - Enables the `pg_stat_statements` extension.
 
 ### traffic_gen
-- Adds the PGDG repo and installs `postgresql-client-16` (provides pgbench).
+- Adds the PGDG repo and installs `postgresql-16` and `postgresql-client-16`.
+  (`pgbench` ships in the server package, not the client package.)
+- Stops and **masks** the local PostgreSQL service — the PGDG installer uses a
+  systemd generator that re-enables the unit at runtime, so `enabled: false`
+  alone is not idempotent; `masked: true` is.
 - Installs `sysbench` from Ubuntu's default repo.
 - Creates a `/usr/local/bin/pgbench` symlink so it's on `PATH`.
 
 ### agent_backend
 - Deploys a Docker Compose stack with four services: `orchestrator` (8080),
   `tool-registry` (8081), `hitl-queue` (8082), `log-store` (8083).
-- Images default to `nginx:alpine` placeholders; override via `group_vars/agent_backend/vars.yml`.
+- Images default to `nginx:alpine` placeholders; override via `inventory/group_vars/agent_backend/vars.yml`.
 
 ### agent_frontend
 - Deploys a Docker Compose stack with three services: `dashboard` (3000),
   `hitl-panel` (3001), `query-interface` (3002).
-- Images default to `nginx:alpine` placeholders; override via `group_vars/agent_frontend/vars.yml`.
+- Images default to `nginx:alpine` placeholders; override via `inventory/group_vars/agent_frontend/vars.yml`.
 
 ## Adding a New Host
 
