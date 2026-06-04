@@ -47,6 +47,51 @@ agent-platform-infra/
     └── verify.yml               # post-deploy assertions
 ```
 
+## OCI Setup (manual, one-time)
+
+VMs are **provisioned manually** in the OCI Console — there is no Terraform or
+other IaC for the infrastructure layer. Ansible takes over once the VMs exist.
+
+### 1. Create the VMs
+
+In the OCI Console, provision four instances matching the architecture table above.
+All four must be in the same VCN and have their private IPs updated in
+`inventory/hosts.yml` if they differ from the values already there.
+
+### 2. Configure SSH access
+
+Ansible connects from arm1 to the other three hosts over SSH using a key at
+`~/.ssh/id_ed25519` (configured in `inventory/hosts.yml` via
+`ansible_ssh_private_key_file`). This must be set up manually:
+
+```bash
+# On your local machine — generate a key if you don't have one
+ssh-keygen -t ed25519 -C "ansible-control"
+
+# Copy the public key to each VM's authorized_keys
+# (OCI lets you inject a key at instance creation; alternatively use ssh-copy-id)
+ssh-copy-id -i ~/.ssh/id_ed25519.pub ubuntu@<vm1-ip>
+ssh-copy-id -i ~/.ssh/id_ed25519.pub ubuntu@<vm2-ip>
+ssh-copy-id -i ~/.ssh/id_ed25519.pub ubuntu@<arm2-ip>
+
+# arm1 is the control node — the key must also exist locally on arm1 itself
+# (used for the ansible_connection: local plays and for SSH to the other hosts)
+```
+
+Verify connectivity before running any playbook:
+
+```bash
+ansible all -i inventory/hosts.yml -m ping
+```
+
+All four hosts should return `pong`. If a host is missing Python, the common
+role's `raw` bootstrap will install it on the first real run.
+
+### 3. Update inventory IPs
+
+Edit `inventory/hosts.yml` and set `ansible_host` to the **private IP** of each
+VM as shown in the OCI Console.
+
 ## Prerequisites
 
 ### Control node (arm1)
