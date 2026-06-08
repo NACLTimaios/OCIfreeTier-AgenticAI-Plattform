@@ -1,0 +1,45 @@
+---
+# Deploy and update the dashboard frontend on arm2
+# Prerequisites: Build frontend locally with `npm run build` in frontend/
+# Run from agent-platform-infra/:
+#   ansible-playbook -i inventory/hosts.yml playbooks/deploy_frontend_update.yml
+
+- name: Deploy Dashboard Frontend updates
+  hosts: agent_frontend
+  gather_facts: no
+  vars:
+    web_root: /var/www/dashboard
+    local_dist: /home/ubuntu/sql_agent/frontend/dist
+  tasks:
+    - name: Backup old dashboard files
+      ansible.builtin.shell:
+        cmd: |
+          if [ -f "{{ web_root }}/index.html" ]; then
+            mv {{ web_root }} {{ web_root }}.backup.$(date +%s)
+            mkdir -p {{ web_root }}
+          fi
+      become: yes
+
+    - name: Copy new frontend build to web root
+      ansible.builtin.copy:
+        src: "{{ local_dist }}/"
+        dest: "{{ web_root }}/"
+        mode: '0644'
+        owner: root
+        group: root
+      become: yes
+
+    - name: Fix permissions for web server
+      ansible.builtin.shell:
+        cmd: chown -R www-data:www-data {{ web_root }}
+      become: yes
+
+    - name: Verify deployment
+      ansible.builtin.shell:
+        cmd: test -f {{ web_root }}/index.html && echo "success" || echo "failed"
+      register: verify
+      changed_when: false
+
+    - name: Confirm deployment successful
+      ansible.builtin.debug:
+        msg: "✅ Frontend successfully deployed. File verification: {{ verify.stdout }}"

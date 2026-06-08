@@ -1,0 +1,75 @@
+---
+# Deploy and restart the SQL Agent API with latest code changes
+# Run from agent-platform-infra/:
+#   ansible-playbook -i inventory/hosts.yml playbooks/deploy_agent_update.yml
+
+- name: Deploy SQL Agent API updates
+  hosts: agent_backend
+  gather_facts: no
+  vars:
+    agent_repo: /home/ubuntu/sql_agent
+  tasks:
+    - name: Pull latest code from git
+      ansible.builtin.command:
+        cmd: git pull origin main
+        chdir: "{{ agent_repo }}"
+      register: git_pull_result
+      changed_when: "git_pull_result.stdout != 'Already up to date.'"
+
+    - name: Show git pull result
+      ansible.builtin.debug:
+        msg: "{{ git_pull_result.stdout }}"
+
+    - name: Kill existing API process
+      ansible.builtin.shell:
+        cmd: pkill -f "python3 main.py run" || true
+      register: pkill_result
+      failed_when: false
+      changed_when: true
+
+    - name: Wait for process to stop
+      ansible.builtin.pause:
+        seconds: 3
+
+    - name: Check if API process exists
+      ansible.builtin.shell:
+        cmd: pgrep -f "python3 main.py run" || echo "not running"
+      register: api_process_check
+      changed_when: false
+
+    - name: Show current process status
+      ansible.builtin.debug:
+        msg: "Current API process: {{ api_process_check.stdout }}"
+
+    - name: Start API with systemd-run (better background handling)
+      ansible.builtin.shell:
+        cmd: systemd-run --user --scope bash -c "cd {{ agent_repo }} && source venv/bin/activate && python3 main.py run --config config.yaml --log-level INFO > /tmp/api.log 2>&1"
+      environment:
+        HOME: /home/ubuntu
+
+    - name: Wait for API to start
+      ansible.builtin.pause:
+        seconds: 8
+
+    - name: Check API log
+      ansible.builtin.shell:
+        cmd: tail -10 /tmp/api.log 2>/dev/null || echo "No log yet"
+      register: api_log
+      changed_when: false
+
+    - name: Show API startup log
+      ansible.builtin.debug:
+        msg: "{{ api_log.stdout }}"
+
+    - name: Verify API is running
+      ansible.builtin.shell:
+        cmd: curl -s http://localhost:8084/api/health | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['status'])"
+      register: health_check
+      retries: 15
+      delay: 2
+      until: health_check.stdout.strip() == "ok"
+      changed_when: false
+
+    - name: Confirm deployment successful
+      ansible.builtin.debug:
+        msg: "✅ API successfully deployed and running. Status: {{ health_check.stdout }}"
